@@ -4,8 +4,13 @@ const adminController = require('../controllers/adminController');
 const upload = require('../middleware/uploadMiddleware');
 
 // Route for bulk onboarding: POST /api/admin/onboard
-router.post('/onboard', upload.single('file'), adminController.bulkOnboard);
-
+// router.post('/onboard', upload.single('file'), adminController.bulkOnboard);
+router.post(
+    '/bulk-onboard', 
+    /* protect, isAdmin, */ // Add your auth middleware when ready
+    upload.single('directoryCsv'), 
+    adminController.bulkOnboard
+);
 // Route for system stats: GET /api/admin/stats
 router.get('/stats', adminController.getStats);
 

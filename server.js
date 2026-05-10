@@ -11,7 +11,6 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http'); 
 const initSocket = require('./utils/socketServer');
-
 // 1. INITIAL CONFIG
 dotenv.config();
 const app = express();
@@ -19,7 +18,7 @@ const server = http.createServer(app); // Wraps Express for WebSockets
 
 // 2. MIDDLEWARE
 app.use(express.json());
-app.use(cors({
+app.use(express.urlencoded({ extended: true }));app.use(cors({
     origin: "*", // Adjust this to your frontend URL in production
     methods: ["GET", "POST", "PUT", "DELETE"]
 }));

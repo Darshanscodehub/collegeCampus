@@ -1,80 +1,114 @@
 const User = require('../models/User');
-const Whitelist = require('../models/Whitelist'); // NEW IMPORT
+const Whitelist = require('../models/Whitelist');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// REGISTER USER
+// @desc    Register a new user (Whitelist restricted)
+// @route   POST /api/auth/register
 exports.register = async (req, res) => {
     try {
-        const { firstName, lastName, email, role, badge, password } = req.body;
+        const { firstName, lastName, email, password } = req.body;
 
         // --- STEP 1: WHITELIST SECURITY CHECK ---
-        const isAllowed = await Whitelist.findOne({ email: email.toLowerCase().trim() });
-        if (!isAllowed) {
+        const whitelistedEntry = await Whitelist.findOne({ email: email.toLowerCase().trim() });
+        
+        if (!whitelistedEntry) {
             return res.status(403).json({ 
-                message: "Access Denied: This email is not on the college's approved list." 
+                message: "Access Denied: Your email is not on the approved campus list. Please contact the administrator." 
             });
         }
 
         // --- STEP 2: CHECK IF ALREADY REGISTERED ---
         let user = await User.findOne({ email: email.toLowerCase() });
-        if (user) return res.status(400).json({ message: "User already exists" });
+        if (user) {
+            return res.status(400).json({ message: "An account with this email already exists." });
+        }
 
-        // --- STEP 3: PROCEED WITH CREATION ---
+        // --- STEP 3: HASH PASSWORD ---
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // --- STEP 4: CREATE USER ---
+        // Note: We use 'whitelistedEntry' values for role and badge to ensure data integrity
         user = new User({
-            profile: { firstName, lastName },
-            email: email.toLowerCase(),
-            role,
-            badge,
-            password: hashedPassword
+            profile: { 
+                firstName: firstName.trim(), 
+                lastName: lastName.trim() 
+            },
+            email: email.toLowerCase().trim(),
+            password: hashedPassword,
+            role: whitelistedEntry.role, // Inherited from Admin CSV
+            badge: whitelistedEntry.cohortBadge // Inherited from Admin CSV
         });
 
         await user.save();
-        res.status(201).json({ message: "Account created successfully!" });
+        res.status(201).json({ 
+            success: true,
+            message: "Account created successfully! You can now log in." 
+        });
 
     } catch (err) {
-        console.error("Reg Error:", err.message);
+        console.error("Registration Error:", err.message);
         res.status(500).json({ message: "Server error during registration" });
     }
 };
 
-// ... updateProfile and login stay the same
-exports.updateProfile = async (req, res) => {
-    const { userId, firstName, lastName, badge } = req.body;
-    try {
-        const user = await User.findByIdAndUpdate(userId, {
-            "profile.firstName": firstName,
-            "profile.lastName": lastName,
-            badge: badge
-        }, { new: true });
-        res.json({ message: "Profile Updated", user });
-    } catch (err) {
-        res.status(500).json({ message: "Update failed" });
-    }
-};
-
+// @desc    Authenticate user & get token
+// @route   POST /api/auth/login
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ email: email.toLowerCase() });
-        
-        if (!user) return res.status(400).json({ message: "Invalid Credentials" });
 
+        // 1. Find user
+        const user = await User.findOne({ email: email.toLowerCase().trim() });
+        if (!user) {
+            return res.status(400).json({ message: "Invalid email or password." });
+        }
+
+        // 2. Compare password
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: "Invalid Credentials" });
+        if (!isMatch) {
+            return res.status(400).json({ message: "Invalid email or password." });
+        }
 
-        const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        // 3. Generate JWT
+        const token = jwt.sign(
+            { userId: user._id, role: user.role }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '24h' }
+        );
 
+        // 4. Send Response
         res.json({
             token,
             userId: user._id,
             userName: user.profile.firstName,
-            role: user.role
+            role: user.role,
+            badge: user.badge
         });
+
     } catch (err) {
+        console.error("Login Error:", err.message);
         res.status(500).json({ message: "Server error during login" });
+    }
+};
+
+// @desc    Update user profile
+// @route   PUT /api/auth/profile
+exports.updateProfile = async (req, res) => {
+    const { userId, firstName, lastName, badge } = req.body;
+    try {
+        const user = await User.findByIdAndUpdate(
+            userId, 
+            {
+                "profile.firstName": firstName,
+                "profile.lastName": lastName,
+                badge: badge
+            }, 
+            { new: true }
+        );
+        res.json({ message: "Profile updated successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: "Update failed" });
     }
 };
