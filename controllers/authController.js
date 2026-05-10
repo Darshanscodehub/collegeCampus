@@ -95,20 +95,42 @@ exports.login = async (req, res) => {
 
 // @desc    Update user profile
 // @route   PUT /api/auth/profile
+// controllers/authController.js
+
 exports.updateProfile = async (req, res) => {
-    const { userId, firstName, lastName, badge } = req.body;
+    const { userId, firstName, lastName, bio } = req.body; // Add bio here
     try {
-        const user = await User.findByIdAndUpdate(
-            userId, 
-            {
-                "profile.firstName": firstName,
-                "profile.lastName": lastName,
-                badge: badge
-            }, 
-            { new: true }
-        );
-        res.json({ message: "Profile updated successfully", user });
+        const updateData = {};
+        if (firstName) updateData["profile.firstName"] = firstName;
+        if (lastName) updateData["profile.lastName"] = lastName;
+        if (bio) updateData["profile.bio"] = bio; // Support bio update
+
+        const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
+        res.json({ message: "Profile Updated", user });
     } catch (err) {
         res.status(500).json({ message: "Update failed" });
+    }
+};
+
+exports.getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find({}, 'profile.firstName role'); // Only get name and role
+        res.json(users);
+    } catch (err) {
+        res.status(500).send("Error fetching users");
+    }
+};
+
+// controllers/authController.js
+
+// controllers/authController.js
+exports.getProfile = async (req, res) => {
+    try {
+        // req.params.userId must match the :userId in your route
+        const user = await User.findById(req.params.userId); 
+        if (!user) return res.status(404).json({ message: "Not found" });
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 };

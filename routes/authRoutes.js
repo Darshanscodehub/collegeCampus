@@ -49,4 +49,8 @@ router.get('/search', async (req, res) => {
         res.status(500).json({ message: "Search error" });
     }
 });
+
+router.get('/users', authController.getAllUsers);
+router.get('/profile/:userId', authController.getProfile);
+router.put('/profile', authController.updateProfile);
 module.exports = router;
